@@ -16,6 +16,10 @@ inputs:
     description: Version of mdfm
     default: latest
     required: false
+  check-existence:
+    description: Check for the existence of an existing mdfm
+    default: "false"
+    required: false
 
 outputs:
   json:
@@ -36,6 +40,7 @@ runs:
         repo: sushichan044/mdfm
         bin-match: mdfm
         strict: true
+        force: ${{ inputs.check-existence != 'true' }}
 
     - name: Run mdfm
       shell: bash

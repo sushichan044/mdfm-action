@@ -47,21 +47,24 @@ runs:
         # Run mdfm and capture output
         echo "Running mdfm with pattern: ${{ inputs.pattern }}"
 
+        # Create tmp file
+        temp_out_file="$(mktemp)"
+
         echo "::group::mdfm output"
         # Save to file and also capture for output
-        mdfm "${{ inputs.pattern }}" | tee "${{ inputs.output-file }}"
+        mdfm "${{ inputs.pattern }}" | tee "$temp_out_file"
         echo "::endgroup::"
 
         # Set outputs
         {
           echo "json<<EOF"
-          cat "${{ inputs.output-file }}"
+          cat "$temp_out_file"
           echo "EOF"
         } >> "$GITHUB_OUTPUT"
 
-        echo "output-file=${{ inputs.output-file }}" >> "$GITHUB_OUTPUT"
+        echo "output-file=$temp_out_file" >> "$GITHUB_OUTPUT"
 
         # Count files
-        files_count=$(jq '. | length' "${{ inputs.output-file }}")
+        files_count=$(jq '. | length' "$temp_out_file")
 
         echo "Processed $files_count Markdown files"

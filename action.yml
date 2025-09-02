@@ -1,0 +1,67 @@
+name: "mdfm - Markdown Frontmatter Extractor"
+description: "Extract frontmatter metadata from Markdown files using glob patterns"
+branding:
+  icon: "file-text"
+  color: "blue"
+
+inputs:
+  pattern:
+    description: 'Glob pattern to match Markdown files (e.g., "**/*.md")'
+    required: true
+  github-token:
+    description: "The GitHub token"
+    required: false
+    default: ${{ github.token }}
+  version:
+    description: Version of mdfm
+    default: latest
+    required: false
+
+outputs:
+  json:
+    description: "JSON string containing extracted frontmatter and content"
+    value: ${{ steps.run.outputs.json }}
+  json-output-file:
+    description: "Path to JSON file temporary stores the output"
+    value: ${{ steps.run.outputs.output-file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup mdfm
+      uses: k1LoW/gh-setup@cfadd455483f37fbb46ca1b3b63532cb62927cb3 # v1.11.3
+      with:
+        github-token: ${{ inputs.github-token }}
+        version: ${{ inputs.version }}
+        repo: sushichan044/mdfm
+        bin-match: mdfm
+        strict: true
+
+    - name: Run mdfm
+      shell: bash
+      id: run
+      run: |
+        set -euo pipefail
+        cd "${GITHUB_WORKSPACE}" || exit 1
+
+        # Run mdfm and capture output
+        echo "Running mdfm with pattern: ${{ inputs.pattern }}"
+
+        echo "::group::mdfm output"
+        # Save to file and also capture for output
+        mdfm "${{ inputs.pattern }}" | tee "${{ inputs.output-file }}"
+        echo "::endgroup::"
+
+        # Set outputs
+        {
+          echo "json<<EOF"
+          cat "${{ inputs.output-file }}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "output-file=${{ inputs.output-file }}" >> "$GITHUB_OUTPUT"
+
+        # Count files
+        files_count=$(jq '. | length' "${{ inputs.output-file }}")
+
+        echo "Processed $files_count Markdown files"

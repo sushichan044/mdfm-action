@@ -1,0 +1,154 @@
+name: Test Action
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "action.yml"
+      - ".github/workflows/integration.yml"
+  pull_request:
+    paths:
+      - "action.yml"
+      - ".github/workflows/integration.yml"
+
+jobs:
+  test-action:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+
+      - name: Test action with basic pattern
+        uses: ./
+        id: test-basic
+        with:
+          pattern: "testdata/**/*.md"
+
+      - name: Verify basic output
+        run: |
+          echo "::group::🔍 Basic Pattern Test Results"
+
+          files_count=$(echo '${{ steps.test-basic.outputs.json }}' | jq -s '. | length')
+          json_length=$(echo '${{ steps.test-basic.outputs.json }}' | wc -c)
+
+          echo "📊 **Test Results:**"
+          echo "- Files processed: $files_count"
+          echo "- JSON output length: $json_length characters"
+
+          # Add to job summary
+          {
+            echo "## 🔍 Basic Pattern Test Results"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Files Processed | $files_count |"
+            echo "| JSON Output Length | $json_length characters |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Verify we got 3 files
+          if [[ "$files_count" != "3" ]]; then
+            echo "::error title=File Count Mismatch::Expected 3 files, got $files_count"
+            echo "❌ **FAILED:** Expected 3 files, got $files_count" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # Verify JSON is valid
+          if echo '${{ steps.test-basic.outputs.json }}' | jq -s . > /dev/null; then
+            echo "::notice title=JSON Validation Success::JSON output is valid and well-formed"
+            echo "✅ **SUCCESS:** JSON output is valid and well-formed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=JSON Validation Failed::JSON output is malformed"
+            echo "❌ **FAILED:** JSON output is malformed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+      - name: Test action with file output
+        uses: ./
+        id: test-file
+        with:
+          pattern: "testdata/blog/*.md"
+
+      - name: Verify file output
+        run: |
+          echo "::group::📁 File Output Test Results"
+
+          files_count=$(echo '${{ steps.test-file.outputs.json }}' | jq -s '. | length')
+          output_file="${{ steps.test-file.outputs.json-output-file }}"
+
+          echo "📊 **File Output Results:**"
+          echo "- Files processed: $files_count"
+          echo "- Output file: $output_file"
+
+          # Add to job summary
+          {
+            echo "## 📁 File Output Test Results"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Files Processed | $files_count |"
+            echo "| Output File | \`$output_file\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Verify file exists and contains valid JSON
+          if [[ ! -f "$output_file" ]]; then
+            echo "::error title=Output File Missing::Output file was not created at expected location"
+            echo "❌ **FAILED:** Output file was not created" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # Verify we got 2 blog files
+          if [[ "$files_count" != "2" ]]; then
+            echo "::error title=Blog File Count Mismatch::Expected 2 blog files, got $files_count"
+            echo "❌ **FAILED:** Expected 2 blog files, got $files_count" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # Verify JSON validity
+          if jq -s . "$output_file" > /dev/null; then
+            echo "::notice title=File Output Success::Output file contains valid JSON with correct file count"
+            echo "✅ **SUCCESS:** Output file contains valid JSON with $files_count files" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=Invalid JSON in Output File::Output file contains malformed JSON"
+            echo "❌ **FAILED:** Output file contains malformed JSON" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+      - name: Display sample results
+        run: |
+          echo "::group::📋 Sample Output Display"
+
+          echo "### 🔍 Basic Pattern Sample"
+          sample_basic=$(echo '${{ steps.test-basic.outputs.json }}' | jq -rs '.[0] | {path: .path, title: .frontMatter.title} | "**Path:** \(.path)\n**Title:** \(.title)"')
+          echo "$sample_basic"
+
+          echo ""
+          echo "### 📁 File Output Sample"
+          sample_file=$(jq -rs '.[0] | {path: .path, title: .frontMatter.title} | "**Path:** \(.path)\n**Title:** \(.title)"' "${{ steps.test-file.outputs.json-output-file }}")
+          echo "$sample_file"
+
+          # Add detailed sample to job summary
+          {
+            echo "## 📋 Sample Output Analysis"
+            echo ""
+            echo "### Basic Pattern Test Sample"
+            echo "\`\`\`json"
+            echo '${{ steps.test-basic.outputs.json }}' | jq -s '.[0] | {path: .path, title: .frontMatter.title}'
+            echo "\`\`\`"
+            echo ""
+            echo "### File Output Test Sample"
+            echo "\`\`\`json"
+            jq -s '.[0] | {path: .path, title: .frontMatter.title}' "${{ steps.test-file.outputs.json-output-file }}"
+            echo "\`\`\`"
+            echo ""
+            echo "---"
+            echo "**🎉 All tests completed successfully!**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::notice title=Test Completion::All markdown processing tests completed successfully"
+          echo "::endgroup::"
